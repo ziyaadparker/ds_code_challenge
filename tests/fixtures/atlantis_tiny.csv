@@ -1,7 +1,7 @@
 notification_number,reference_number,creation_timestamp,completion_timestamp,directorate,department,branch,section,code_group,code,cause_code_group,cause_code,official_suburb,latitude,longitude,h3_level8_index,distance_to_centroid_m
 N1,R1,2020-01-01 10:15:00+02:00,2020-01-01 12:30:00+02:00,WATER AND WASTE,Water and Sanitation,Area North,Reticulation,Burst,Burst pipe,Wear,Age,ATLANTIS,-33.577,18.487,88ad360001fffff,100.0
-N2,R2,2020-01-01 10:45:00+02:00,2020-01-01 16:00:00+02:00,WATER AND WASTE,Water and Sanitation,Area North,Reticulation,Burst,Burst pipe,Wear,Age,WESFLEUR,-33.577,18.487,88ad360001fffff,110.0
-N3,R3,2020-01-01 11:10:00+02:00,2020-01-01 18:00:00+02:00,WATER AND WASTE,Water and Sanitation,Area North,Reticulation,Burst,Burst pipe,Wear,Age,SAXONSEA,-33.577,18.487,88ad360001fffff,120.0
-N4,R4,2020-01-01 11:40:00+02:00,2020-01-02 08:00:00+02:00,WATER AND WASTE,Water and Sanitation,Area North,Reticulation,Burst,Burst pipe,Wear,Age,ATLANTIS,-33.577,18.487,88ad360001fffff,130.0
-N5,R5,2020-01-01 09:50:00+02:00,2020-01-01 14:00:00+02:00,WATER AND WASTE,Water and Sanitation,Area North,Reticulation,Burst,Burst pipe,Wear,Age,ATLANTIS,-33.577,18.487,88ad360001fffff,140.0
+N2,R2,2020-01-01 10:45:00+02:00,2020-01-01 13:00:00+02:00,WATER AND WASTE,Water and Sanitation,Area North,Reticulation,Burst,Burst pipe,Wear,Age,WESFLEUR,-33.577,18.487,88ad360001fffff,110.0
+N3,R3,2020-01-01 11:10:00+02:00,2020-01-01 11:30:00+02:00,WATER AND WASTE,Water and Sanitation,Area North,Reticulation,Burst,Burst pipe,Wear,Age,SAXONSEA,-33.577,18.487,88ad360001fffff,120.0
+N4,R4,2020-01-01 11:40:00+02:00,2020-01-01 10:00:00+02:00,WATER AND WASTE,Water and Sanitation,Area North,Reticulation,Burst,Burst pipe,Wear,Age,ATLANTIS,-33.577,18.487,88ad360001fffff,130.0
+N5,R5,2020-01-01 09:50:00+02:00,2020-01-01 09:00:00+02:00,WATER AND WASTE,Water and Sanitation,Area North,Reticulation,Burst,Burst pipe,Wear,Age,ATLANTIS,-33.577,18.487,88ad360001fffff,140.0
 N6,R6,2020-11-10 09:57:00+02:00,2020-11-10 15:00:00+02:00,URBAN MOBILITY,Roads,Area North,District,Pothole,Pothole,Wear,Age,ATLANTIS,-33.58,18.49,88ad360003fffff,400.0

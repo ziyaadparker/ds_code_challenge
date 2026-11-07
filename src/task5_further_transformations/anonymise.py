@@ -25,10 +25,16 @@ circular mean direction of the distinct hours in that bucket. Every row
 in the bucket shares it, so wind cannot distinguish one resident from
 another in the same cell.
 
-On top of those generalisations, a k-anonymity check groups records by
-``(h3_level8_index, creation_time_bucket)`` and routes groups smaller than
-``ANONYMISATION_K_THRESHOLD`` to a separate human-review file. That review
-file is **not** a public deliverable. It still has the original hourly wind.
+On top of those generalisations, a k-anonymity check groups records by every
+quasi-identifier that is actually on the public release -
+``(h3_level8_index, creation_time_bucket, completion_time_bucket)`` - and
+routes groups smaller than ``ANONYMISATION_K_THRESHOLD`` to a separate
+human-review file. ``completion_time_bucket`` has to be in that partition,
+not just the first two columns: it is its own independent 6-hour bucket, so
+five records with the same hex and creation bucket could still land in five
+different completion buckets, which would make each one distinguishable
+again in the file that is actually published. That review file is **not**
+a public deliverable. It still has the original hourly wind.
 
 See README.md (task 5.3) for the <500 word justification write-up.
 
@@ -96,12 +102,23 @@ def build_anonymised_tables(
         """
     )
 
+    # Partitioned on every quasi-identifier actually present on the public
+    # release, not just the two that are easiest to think about. The public
+    # file also carries completion_time_bucket (ANONYMISATION_RELEASE_COLUMNS)
+    # - if it were left out here, five rows could share the same hex and
+    # creation_time_bucket while having five different completion_time_bucket
+    # values, making each one individually distinguishable again in the
+    # column that was actually published. See AI_log.md for how this was
+    # found and the alternative (dropping completion_time_bucket) that was
+    # rejected.
     con.execute(
         """
         CREATE OR REPLACE TABLE with_group_size AS
         SELECT
             g.*,
-            COUNT(*) OVER (PARTITION BY h3_level8_index, creation_time_bucket) AS quasi_id_group_size
+            COUNT(*) OVER (
+                PARTITION BY h3_level8_index, creation_time_bucket, completion_time_bucket
+            ) AS quasi_id_group_size
         FROM generalised g
         """
     )
@@ -187,7 +204,8 @@ def main() -> None:
     n_review = n_total - n_released
 
     logger.info(
-        "k-anonymity (k=%d) over (h3_level8_index, creation_time_bucket): "
+        "k-anonymity (k=%d) over (h3_level8_index, creation_time_bucket, "
+        "completion_time_bucket): "
         "%d/%d records (%.2f%%) released; %d/%d (%.2f%%) routed to manual review",
         ANONYMISATION_K_THRESHOLD,
         n_released, n_total, 100 * n_released / n_total if n_total else 0,

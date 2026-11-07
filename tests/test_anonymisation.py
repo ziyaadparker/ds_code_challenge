@@ -105,6 +105,129 @@ def test_k_anonymity_grouping_and_routing(con):
     assert len(review) == 1  # the lone hexB/bucket2 row
 
 
+def _write_wind_augmented_csv(tmp_path: Path, rows: list[dict]) -> Path:
+    """Write a minimal wind_augmented-shaped CSV with just the columns
+    build_anonymised_tables() needs: enough to compute the buckets, join the
+    wind summary, and run the for_human_review join on notification_number."""
+    import csv
+
+    path = tmp_path / "wind_augmented.csv"
+    fieldnames = [
+        "notification_number", "h3_level8_index",
+        "creation_timestamp", "completion_timestamp",
+        "wind_speed", "wind_direction", "wind_data_available",
+    ]
+    with path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    return path
+
+
+def test_completion_time_bucket_is_part_of_the_k_anonymity_check(tmp_path):
+    """Regression test for a bug flagged in review: the k-anonymity check
+    originally partitioned only on (h3_level8_index, creation_time_bucket),
+    but completion_time_bucket is also on the public release
+    (ANONYMISATION_RELEASE_COLUMNS). Five rows sharing a hex and a
+    creation-time bucket, but landing in five different completion-time
+    buckets, were being released as a 'group of 5' even though every row
+    was actually unique once completion_time_bucket was looked at - each
+    one individually distinguishable in the file that gets published.
+
+    All five rows below share hex + creation bucket (2020-01-01 06:00 UTC)
+    but each has a different completion_timestamp 6-hour bucket, so none of
+    them should be released once completion_time_bucket is included in the
+    partition."""
+    from src.task5_further_transformations.anonymise import build_anonymised_tables
+
+    rows = [
+        {
+            "notification_number": f"N{i}",
+            "h3_level8_index": "88ad360001fffff",
+            "creation_timestamp": "2020-01-01 09:00:00+02:00",
+            # UTC completion buckets: 00:00, 06:00, 12:00, 18:00 (day 1), 00:00 (day 2)
+            "completion_timestamp": completion,
+            "wind_speed": "4.0",
+            "wind_direction": "180",
+            "wind_data_available": "true",
+        }
+        for i, completion in enumerate(
+            [
+                "2020-01-01 03:00:00+02:00",
+                "2020-01-01 09:00:00+02:00",
+                "2020-01-01 15:00:00+02:00",
+                "2020-01-01 21:00:00+02:00",
+                "2020-01-02 03:00:00+02:00",
+            ],
+            start=1,
+        )
+    ]
+    source_path = _write_wind_augmented_csv(tmp_path, rows)
+
+    con = duckdb.connect()
+    build_anonymised_tables(con, source_path=source_path)
+
+    n_released = con.execute("SELECT COUNT(*) FROM anonymised_release").fetchone()[0]
+    n_review = con.execute("SELECT COUNT(*) FROM for_human_review").fetchone()[0]
+    assert n_released == 0, (
+        "no row should be released: each row is unique once "
+        "completion_time_bucket is included in the quasi-identifier group"
+    )
+    assert n_review == 5
+
+
+def test_every_released_quasi_identifier_combination_meets_k_threshold(tmp_path):
+    """The real invariant the k-anonymity check exists to guarantee: in the
+    *published* file, every combination of released quasi-identifiers
+    (h3_level8_index, creation_time_bucket, completion_time_bucket) must
+    appear at least ANONYMISATION_K_THRESHOLD times. This checks the actual
+    output table, not the SQL that produced it, so it would catch this bug
+    (or a similar one) even if a future refactor changed the partition
+    clause without updating this test."""
+    from src.common.config import ANONYMISATION_K_THRESHOLD
+    from src.task5_further_transformations.anonymise import build_anonymised_tables
+
+    # Five rows: same hex, same creation bucket, same completion bucket ->
+    # one group of 5, releasable. One more row, alone in its own hex -> review.
+    rows = [
+        {
+            "notification_number": f"N{i}",
+            "h3_level8_index": "88ad360001fffff",
+            "creation_timestamp": "2020-01-01 09:00:00+02:00",
+            "completion_timestamp": "2020-01-01 09:30:00+02:00",
+            "wind_speed": "4.0",
+            "wind_direction": "180",
+            "wind_data_available": "true",
+        }
+        for i in range(1, 6)
+    ] + [
+        {
+            "notification_number": "N6",
+            "h3_level8_index": "88ad360003fffff",
+            "creation_timestamp": "2020-11-10 09:57:00+02:00",
+            "completion_timestamp": "2020-11-10 15:00:00+02:00",
+            "wind_speed": "4.0",
+            "wind_direction": "180",
+            "wind_data_available": "true",
+        }
+    ]
+    source_path = _write_wind_augmented_csv(tmp_path, rows)
+
+    con = duckdb.connect()
+    build_anonymised_tables(con, source_path=source_path)
+
+    group_sizes = con.execute(
+        """
+        SELECT COUNT(*)
+        FROM anonymised_release
+        GROUP BY h3_level8_index, creation_time_bucket, completion_time_bucket
+        """
+    ).fetchall()
+    assert group_sizes, "expected at least one released group in this fixture"
+    for (size,) in group_sizes:
+        assert size >= ANONYMISATION_K_THRESHOLD
+
+
 def test_public_release_schema_has_no_suburb_or_service_type():
     from src.common.config import ANONYMISATION_DROP_FROM_RELEASE, ANONYMISATION_RELEASE_COLUMNS
 
