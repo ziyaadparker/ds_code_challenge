@@ -67,7 +67,7 @@ run_pipeline.py                     # single entry point: pytest, then every tas
 requirements.txt                    # human-edited minimum versions
 requirements.lock                   # exact pins; install this. Regenerated from requirements.txt
 samples/                            # tiny committed slices of outputs + a wind-join log excerpt
-tests/fixtures/                     # tiny CSV/GeoJSON + wind .ods used by tests (and as wind fallback)
+tests/fixtures/                     # tiny CSV/GeoJSON + wind .ods used only by tests (not a production fallback)
 config/
   hex_polygon_schema.json           # standalone schema used by task 1's conformance check
 src/
