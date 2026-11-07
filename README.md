@@ -13,16 +13,22 @@ and 6 (Data Analyst / Data Scientist / Visualisation Engineer) are out of
 scope for this submission.
 
 **Constraints followed:** Python + SQL only (no R); all SQL is executed
-through [DuckDB](https://duckdb.org/); developed and run under
-`pyenv activate env311` (Python 3.11.3).
+through [DuckDB](https://duckdb.org/). Developed against Python 3.11.
 
 ## TL;DR - how to run it
 
 ```bash
-pyenv activate env311
-pip install -r requirements.txt
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.lock
 python run_pipeline.py
 ```
+
+`requirements.lock` pins the exact dependency versions this was built and
+tested against (generated with `pip-compile` from `pyproject.toml`); use
+that rather than `requirements.txt` for a reproducible environment.
+Windows: activate with `.venv\Scripts\activate` instead of the `source`
+line above.
 
 That's the **entire** interface. `run_pipeline.py` first runs `pytest`
 (fail-fast if tests fail), then downloads all raw data (idempotently),
