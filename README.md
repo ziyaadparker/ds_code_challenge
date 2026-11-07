@@ -25,10 +25,17 @@ python run_pipeline.py
 ```
 
 `requirements.lock` pins the exact dependency versions this was built and
-tested against (generated with `pip-compile` from `pyproject.toml`); use
-that rather than `requirements.txt` for a reproducible environment.
+tested against. Use that rather than `requirements.txt` for a reproducible
+environment. `requirements.txt` is the human-edited source (minimum versions
+plus comments); regenerate the lock from it with:
+
+```bash
+python -m pip install pip-tools
+pip-compile --output-file=requirements.lock --strip-extras requirements.txt
+```
+
 Windows: activate with `.venv\Scripts\activate` instead of the `source`
-line above.
+line in the block above.
 
 That's the **entire** interface. `run_pipeline.py` first runs `pytest`
 (fail-fast if tests fail), then downloads all raw data (idempotently),
@@ -57,7 +64,8 @@ python -m pytest tests/ -v
 
 ```
 run_pipeline.py                     # single entry point: pytest, then every task
-requirements.txt
+requirements.txt                    # human-edited minimum versions
+requirements.lock                   # exact pins; install this. Regenerated from requirements.txt
 samples/                            # tiny committed slices of outputs + a wind-join log excerpt
 tests/fixtures/                     # tiny CSV/GeoJSON + wind .ods used by tests (and as wind fallback)
 config/
