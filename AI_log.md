@@ -62,6 +62,16 @@ I found this one myself, after the pipeline was otherwise working, by rereading 
 
 I weighed two fixes. Drop `completion_time_bucket` from the public release entirely, so the existing two-column check stays correct by removing the field it wasn't covering. Or add it to the partition, so the check covers everything that is actually published. Dropping it is simpler and never needs revisiting, but it throws away a field that's already coarsened to 6 hours and useful on its own (how long a request took to resolve). I kept it and widened the check instead: `with_group_size` now partitions on `(h3_level8_index, creation_time_bucket, completion_time_bucket)`, so a row is only released if that exact three-way combination has at least 5 members. I had Cursor add two tests: one that reproduces the original gap directly (five rows, one hex, one creation bucket, five different completion buckets - none of them should release), and one that groups the actual output table by every released quasi-identifier and asserts every group is at least 5, so it would fail if a future change weakened the check even without touching this logic directly.
 
+### A test fixture was quietly acting like real data
+
+A reviewer flagged this one, and it was a real bug. `download_wind_data()` fell back to the committed `.ods` test fixture whenever the live City endpoint failed, which it always does now (404, then DNS failure). That meant a normal pipeline run could mark rows `wind_data_available = True` with a wind reading that was never actually observed - it came from synthetic data I wrote for the tests, not the City's sensor. The public file would have quietly presented made-up numbers as real ones.
+
+The same reviewer also re-checked the completion-bucket fix from a point-in-time copy of the published code and reported it as still missing. By the time that comment landed, the fix was already committed and pushed to my fork - I'd confirmed it there before touching anything else. I didn't need to redo that one, just double-check it was really in and really pushed, which it was.
+
+For the fixture bug, I had Cursor remove the fixture from `download_wind_data()`'s fallback chain entirely. Production now only ever returns a real downloaded file, a real cached file, or `None` (which degrades to `wind_data_available = False` and NULL wind columns). The fixture stays, but only the test suite touches it directly - `test_wind.py` and `test_integration_fixtures.py` call `parse_wind_data()` on it themselves, never through `download_wind_data()`. I had a regression test added that mocks every live request as failing and asserts `download_wind_data()` still returns `None`, not the fixture path, even though the fixture file is sitting right there on disk.
+
+I also re-ran the real pipeline after the fix: 0/8,122 Atlantis rows get a wind match now (the endpoint really is dead), and I regenerated the committed sample CSV and wind-join log from that run so what's in `samples/` matches what the corrected code actually does, instead of a run from before the fix.
+
 ## What I kept for myself
 
 I did not hand the design to the models. I used them to write and revise code against a plan I had already made. If a suggestion still made sense after I ran it, I kept it.

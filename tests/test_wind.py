@@ -1,15 +1,18 @@
 """Tests for Task 5.2 wind parsing and hourly join, using the committed .ods fixture."""
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import duckdb
 import pandas as pd
+import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.common.config import WIND_FIXTURE_PATH  # noqa: E402
+from src.common.config import WIND_DATA_PATH, WIND_FIXTURE_PATH  # noqa: E402
 from src.task5_further_transformations.augment_wind import (  # noqa: E402
     build_augmented_output,
+    download_wind_data,
     parse_wind_data,
 )
 
@@ -52,6 +55,27 @@ def test_wind_join_sets_availability_flag_when_hour_matches():
         "SELECT wind_data_available FROM atlantis_wind WHERE notification_number = 'N6'"
     ).fetchone()[0]
     assert n6 is True  # fixture includes 2020-11-10 08:00 UTC
+
+
+def test_download_wind_data_never_falls_back_to_the_test_fixture():
+    """Regression test for a real bug flagged in review: download_wind_data
+    used to fall back to the committed synthetic fixture when the live
+    endpoint was unreachable, which let a production run mark fixture-derived
+    rows as wind_data_available=True - presenting made-up readings as real
+    observations. It must return None (triggering graceful degradation to
+    NULL / wind_data_available=False) instead, even though the fixture file
+    exists on disk and even though every live request fails."""
+    assert WIND_FIXTURE_PATH.exists(), "fixture should exist for this test to be meaningful"
+    assert not WIND_DATA_PATH.exists(), "a real cached file would (correctly) short-circuit the fallback check"
+
+    with patch(
+        "src.task5_further_transformations.augment_wind.requests.get",
+        side_effect=requests.exceptions.ConnectionError("simulated: endpoint unreachable"),
+    ):
+        result = download_wind_data(max_retries=1, backoff_seconds=0)
+
+    assert result is None
+    assert result != WIND_FIXTURE_PATH
 
 
 def test_wind_join_degrades_when_hourly_frame_is_missing():

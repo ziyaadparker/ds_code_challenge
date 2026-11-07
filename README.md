@@ -253,6 +253,12 @@ The script's strategy, in order:
    `wind_data_available = False` with the wind columns left `NULL`. A
    prominent, unambiguous `WARNING` is logged explaining why.
 
+This is the **only** production fallback chain. There is no step where a
+real-world run substitutes synthetic data and calls it observed - a row is
+either `wind_data_available = True` with a wind reading that came from the
+live endpoint or a locally cached copy of it, or it's `False` with `NULL`
+wind columns. Nothing else is presented as a real observation.
+
 **Why graceful degradation here, but a hard error threshold in task 2?**
 The wind join is a *best-effort enrichment* of an already-complete,
 already-validated dataset - failing the whole task because an optional,
@@ -263,14 +269,18 @@ all. Task 2's hex join, by contrast, is *load-bearing* - a badly joined
 `h3_level8_index` silently corrupts every downstream analysis - so that's
 exactly the situation where a hard failure threshold is the right call.
 
-After the live URLs fail, the script falls back to a **committed fixture**
-(`tests/fixtures/wind_atlantis_2020.ods`) — a small, realistic `.ods` with
-a title block plus Date/Speed/Direction columns — so the parse and hourly
-join are still demonstrated. Coverage against the real Atlantis subsample
-is only a handful of rows (the fixture has four hours); that is expected.
-A reviewer can see matched vs unmatched flags in `samples/` without
-re-running. Tests parse this same file, so the join is proven even when
-the City portal is down.
+**The committed fixture is for tests only, not for production.** A small,
+realistic `.ods` with a title block plus Date/Speed/Direction columns lives
+at `tests/fixtures/wind_atlantis_2020.ods`. `test_wind.py` and
+`test_integration_fixtures.py` parse it directly to prove the parsing and
+hourly-join logic without any network access, so the join is proven even
+when the City portal is down. `download_wind_data()` never returns this
+path: an earlier version of this script *did* fall back to it after a live
+failure, which meant a real pipeline run could tag synthetic, made-up
+readings as `wind_data_available = True`. That has been corrected - see
+`main()`'s docstring in `augment_wind.py` for the fix, and
+`test_download_wind_data_never_falls_back_to_the_test_fixture` for the
+regression test.
 
 The parsing logic (`parse_wind_data`) is written defensively (it scans for
 a header row and matches column names containing "date"/"time",
@@ -302,8 +312,11 @@ Starting from the task 5.2 output, the **public** release
   speed and circular-mean direction of the distinct hours in that bucket,
   identical on every row in the bucket. The hourly reading stays on the
   internal review file only.
-* **k-anonymity (k=5)** on `(h3_level8_index, creation_time_bucket)`.
-  Smaller groups go to `sr_hex_atlantis_anonymised_for_review.csv`.
+* **k-anonymity (k=5)** on every quasi-identifier actually on the public
+  release: `(h3_level8_index, creation_time_bucket, completion_time_bucket)`.
+  Smaller groups go to `sr_hex_atlantis_anonymised_for_review.csv`. (An
+  earlier version of this check only partitioned on the first two columns;
+  see `AI_log.md` for how the gap was found and fixed.)
 
 **That review file is internal-only — not a public deliverable.** It keeps
 original IDs, coordinates, timestamps, suburb and service type so a human
@@ -311,8 +324,13 @@ can finish anonymisation by hand. Every run also writes
 `sr_hex_atlantis_anonymised_for_review.INTERNAL_ONLY.txt` next to it.
 Do not copy the review CSV when sharing outputs.
 
-On this dataset: **2,375/8,122 (29%) released automatically; 5,747/8,122
-(71%) routed to manual review.**
+On this dataset: **435/8,122 (5.36%) released automatically; 7,687/8,122
+(94.64%) routed to manual review.** (This is lower than an earlier figure
+quoted here, because the k-anonymity check now also partitions on
+`completion_time_bucket` — see above and `AI_log.md`. Adding a third
+quasi-identifier column to the same group makes the groups smaller, which
+is expected and correct: it matches what the public file actually
+contains.)
 
 **Anonymisation justification (< 500 words)**
 
@@ -344,7 +362,7 @@ The public file therefore publishes one figure per bucket — mean speed
 and circular-mean direction of the distinct hours in it — shared by
 every row in the cell.
 
-The 71% review rate is a finding about this extract, not a broken rule.
+The ~95% review rate is a finding about this extract, not a broken rule.
 500 m and 6 hours do not anonymise a small, local, year-long file unless
 most rows are reviewed by hand or the grid is coarsened further, which
 would break the brief. The queue is shown on purpose. A reviewer can
@@ -363,10 +381,14 @@ dataset:
 * `test_join_logic.py` - point-in-polygon match / miss / null-coordinate
   routing, plus **overlapping polygons must not duplicate requests**.
 * `test_anonymisation.py` - UTC 6-hour flooring (including the float-`//`
-  regression), k-anonymity routing, and the public-release column allowlist
-  (no suburb / service type / IDs).
+  regression), k-anonymity routing (on all three released quasi-identifier
+  columns, including a regression test for the completion-bucket gap
+  described above), and the public-release column allowlist (no suburb /
+  service type / IDs).
 * `test_wind.py` - parse the committed `.ods` fixture, average sub-hourly
-  readings, join hours, and the all-NULL degrade path.
+  readings, join hours, the all-NULL degrade path, and a regression test
+  that `download_wind_data()` never falls back to the test fixture in
+  production.
 * `test_integration_fixtures.py` - one path through join → wind →
   anonymise on tiny CSV + GeoJSON + `.ods` (no 941k-row files, no network).
 
@@ -374,7 +396,7 @@ dataset:
 
 ```bash
 python -m pytest tests/ -v
-# 27 passed
+# 30 passed
 ```
 
 ## Design notes / why these choices

@@ -20,11 +20,20 @@ Strategy chosen, in order:
        to absorb transient failures.
     2. Fall back to a local cache (``data/external/``) from a previous
        successful run, so a one-off outage doesn't block a re-run.
-    3. Fall back to the committed fixture
-       ``tests/fixtures/wind_atlantis_2020.ods`` so the parse + hourly join
-       can still be demonstrated (and tested) when the portal is down.
-    4. If even that is missing, **degrade gracefully**: output is still
-       produced, with ``wind_data_available = False`` and NULL wind columns.
+    3. If both fail, **degrade gracefully**: output is still produced, with
+       ``wind_data_available = False`` and NULL wind columns.
+
+The committed fixture ``tests/fixtures/wind_atlantis_2020.ods`` is deliberately
+**not** part of this production fallback chain. It is synthetic data, used
+only by the test suite (``test_wind.py``, ``test_integration_fixtures.py``) to
+prove the parse + hourly-join logic without hitting the network. An earlier
+version of this script *did* fall back to the fixture in ``download_wind_data``
+after a live-endpoint failure, which meant a production run could mark
+synthetic rows as ``wind_data_available = True`` - i.e. present made-up wind
+readings as if they were real observations. That was wrong and has been
+removed: a production run with no reachable real file now produces
+``wind_data_available = False`` / NULL wind columns, same as if nothing had
+been committed to ``tests/fixtures/`` at all.
 
 Why graceful degradation rather than raising an exception? The wind join is
 an *enrichment* of the core, already-validated Atlantis subsample - failing
@@ -74,19 +83,21 @@ CANDIDATE_URLS = [
 
 
 def download_wind_data(max_retries: int = 3, backoff_seconds: float = 2.0) -> Path | None:
-    """Try to download the wind data file. Returns the local path, or None
-    if every candidate URL, the committed fixture, and a cached copy are all
-    unavailable."""
+    """Try to download the real wind data file. Returns the local path, or
+    None if every candidate URL and a cached copy are all unavailable.
+
+    Deliberately does **not** fall back to the committed test fixture
+    (``WIND_FIXTURE_PATH``). That fixture is synthetic data for the test
+    suite only - if this function returned it, a production run would mark
+    rows as ``wind_data_available = True`` for a reading that was never
+    actually observed. See the module docstring for why that fallback was
+    removed."""
     if WIND_DATA_PATH.exists():
         logger.info("Using cached wind data file at %s", WIND_DATA_PATH)
         return WIND_DATA_PATH
 
-    # One attempt per URL is enough to *document* that the portal is down
-    # when we already have a committed fixture to fall back to.
-    attempts = 1 if WIND_FIXTURE_PATH.exists() else max_retries
-
     for url in CANDIDATE_URLS:
-        for attempt in range(1, attempts + 1):
+        for attempt in range(1, max_retries + 1):
             try:
                 resp = requests.get(url, timeout=30)
                 resp.raise_for_status()
@@ -100,24 +111,18 @@ def download_wind_data(max_retries: int = 3, backoff_seconds: float = 2.0) -> Pa
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
                     "Wind data download failed (url=%s, attempt %d/%d): %s",
-                    url, attempt, attempts, exc,
+                    url, attempt, max_retries, exc,
                 )
-                if attempt < attempts:
+                if attempt < max_retries:
                     time.sleep(backoff_seconds * attempt + random.uniform(0, 1))
-
-    if WIND_FIXTURE_PATH.exists():
-        logger.warning(
-            "Upstream wind endpoint is unreachable; falling back to committed "
-            "fixture %s so the hourly join can still be demonstrated.",
-            WIND_FIXTURE_PATH,
-        )
-        return WIND_FIXTURE_PATH
 
     logger.error(
         "Could not download wind data from any candidate URL (%s) and no local "
-        "cache or fixture exists. Proceeding with graceful degradation - the "
-        "output will mark every row as wind_data_available=False.",
-        CANDIDATE_URLS,
+        "cache exists. Proceeding with graceful degradation - the output will "
+        "mark every row as wind_data_available=False. (The committed test "
+        "fixture at %s is intentionally not used as a production fallback - "
+        "see the module docstring.)",
+        CANDIDATE_URLS, WIND_FIXTURE_PATH,
     )
     return None
 
@@ -253,11 +258,7 @@ def main() -> None:
         )
         logger.info("Wrote %s", ATLANTIS_WIND_AUGMENTED_PATH)
 
-    source = (
-        "none (degraded)"
-        if wind_hourly is None
-        else ("live/cache" if WIND_DATA_PATH.exists() else "committed fixture")
-    )
+    source = "live/cache" if wind_hourly is not None else "none (degraded)"
     logger.info("Task 5.2 completed (wind source: %s).", source)
 
 
