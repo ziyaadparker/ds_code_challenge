@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Environment
+.venv/
+venv/
+
+# Data - raw inputs are large (~250MB combined) and are re-downloaded
+# automatically by src/task0_setup/download_data.py (and by run_pipeline.py),
+# so they're not committed. Derived outputs are reproducible by re-running
+# the pipeline and are likewise excluded to keep the repo small.
+data/raw/
+data/interim/
+data/processed/
+data/external/
+
+# Logs are generated fresh on every run
+logs/*.log
+
+# OS/editor cruft
+.DS_Store
+.vscode/
+.idea/

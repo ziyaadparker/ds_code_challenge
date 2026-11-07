@@ -1,0 +1,19 @@
+# Core
+duckdb>=2.0.0          # SQL engine used for every transformation/join in this submission
+boto3>=1.40.0           # AWS S3 client (used for S3 Select in task 1)
+requests>=2.34.0        # HTTP downloads (raw data, Nominatim, wind data)
+pandas>=2.2.0           # Used only for reading the .ods wind spreadsheet
+pyarrow>=17.0.0         # Backs pandas' faster CSV/Parquet IO
+
+# Geo
+h3>=4.5.0               # Independent cross-check of the H3 index in task 2
+shapely>=2.2.0          # Polygon centroid computation in task 5.1
+
+# Spreadsheet support
+odfpy>=1.4.1            # Lets pandas read the .ods wind data file (task 5.2)
+
+# Validation
+jsonschema>=4.23.0      # Schema-conformance scoring in task 1
+
+# Testing
+pytest>=8.3.0
