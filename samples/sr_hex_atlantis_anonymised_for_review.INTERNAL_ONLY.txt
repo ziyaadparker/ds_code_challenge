@@ -1,0 +1,1 @@
+INTERNAL USE ONLY — not for public release. This file retains original identifiers, exact coordinates, timestamps, suburb and service-type fields so a human can anonymise leftover k<5 records by hand. The public deliverable is sr_hex_atlantis_anonymised.csv.
