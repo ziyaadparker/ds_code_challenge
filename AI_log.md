@@ -56,6 +56,12 @@ Joining wind on the hour the request was created is the right join for task 5.2.
 
 I changed the public file to one station summary per 6-hour bucket: mean speed and a circular mean of direction. The hourly values stay on the internal review file.
 
+### The k-anonymity check missed a column I was already publishing
+
+I found this one myself, after the pipeline was otherwise working, by rereading what `ANONYMISATION_RELEASE_COLUMNS` actually contained against what the k-anonymity check actually grouped by. The check only partitioned on `(h3_level8_index, creation_time_bucket)`. The public release also has `completion_time_bucket`, a separate 6-hour bucket computed independently from `completion_timestamp`. Five rows could pass the k=5 check by sharing a hex and a creation bucket, then land in five different completion buckets once published - each one unique again in the file a reviewer would actually see, even though the SQL thought it had released a safe group of 5.
+
+I weighed two fixes. Drop `completion_time_bucket` from the public release entirely, so the existing two-column check stays correct by removing the field it wasn't covering. Or add it to the partition, so the check covers everything that is actually published. Dropping it is simpler and never needs revisiting, but it throws away a field that's already coarsened to 6 hours and useful on its own (how long a request took to resolve). I kept it and widened the check instead: `with_group_size` now partitions on `(h3_level8_index, creation_time_bucket, completion_time_bucket)`, so a row is only released if that exact three-way combination has at least 5 members. I had Cursor add two tests: one that reproduces the original gap directly (five rows, one hex, one creation bucket, five different completion buckets - none of them should release), and one that groups the actual output table by every released quasi-identifier and asserts every group is at least 5, so it would fail if a future change weakened the check even without touching this logic directly.
+
 ## What I kept for myself
 
 I did not hand the design to the models. I used them to write and revise code against a plan I had already made. If a suggestion still made sense after I ran it, I kept it.
@@ -66,6 +72,6 @@ Task 1 filters in S3 instead of downloading 108 MB. Task 2 is a spatial join tha
 
 **The cutoffs.** I picked these, not the model. A conformance score rather than pass or fail. A 1% join-failure limit. One arc-minute as 1,852 m. k = 5. Suburb and service type come off the public file. Hourly wind stays off it too, for the reason above.
 
-**Catching the mistakes.** I found the four problems above by reading timings, counts, and a few rows. The model did not flag them. The join that would not finish, the schema that scored zero, the time bucket that was still the exact timestamp, and the wind value that leaked the hour. I then said what to do: filter before `ST_Within`, count a real H3 index, cast `epoch()` to an integer, and publish one wind figure per 6-hour bucket.
+**Catching the mistakes.** I found the five problems above by reading timings, counts, and a few rows, and by rereading the anonymisation logic against what it was supposed to guarantee. The model did not flag any of them. The join that would not finish, the schema that scored zero, the time bucket that was still the exact timestamp, the wind value that leaked the hour, and the k-anonymity check that didn't cover a column it was already publishing. I then said what to do: filter before `ST_Within`, count a real H3 index, cast `epoch()` to an integer, publish one wind figure per 6-hour bucket, and partition the k-anonymity check on every released quasi-identifier, not just the first two.
 
 **Tools.** I chose Python 3.11 in `pyenv` env `env311`, DuckDB for the SQL, boto3 for S3 Select, and pytest. No R. I also chose what goes in the repo: the code, the fixtures, and the samples. The large downloads stay out. The review file is for me to look at, not to publish.
