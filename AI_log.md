@@ -4,14 +4,17 @@ I used two tools. I talked through the plan with ChatGPT before writing code. I 
 
 ## Token usage
 
-I did not record Claude Sonnet token usage.
+ChatGPT does not show token usage in chats, so I have no figure for GPT-6.
 
-Grok usage is from my Cursor usage list for `cursor-grok-4.6-medium-fast`. Those requests add up to **2,645,600 tokens**.
+Claude Sonnet usage is from my Cursor usage list for `claude-sonnet-5-thinking-medium`. Those requests add up to **1,033,100 tokens**.
+
+Grok usage is from my Cursor usage list for `cursor-grok-4.6-medium-fast`. Those requests add up to **4,645,600 tokens**.
 
 ## Planning
 
 **Tool:** ChatGPT (OpenAI)
 **Model:** GPT-6
+**Token usage:** not available. ChatGPT does not show token usage when chatting, so I cannot report a figure for this part of the work.
 
 I used this to think through how I would approach the assessment: what the brief was actually asking for, how I would keep the work reproducible, and how I would handle the awkward parts (a dead download, a privacy release). I checked anything I took from that conversation against the brief myself.
 
